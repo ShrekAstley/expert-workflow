@@ -1,0 +1,18 @@
+---
+description: Delegate non-trivial work across model tiers - expert (hard decisions), worker (well-scoped implementation), scout (read-only search). Apply to features, bug hunts, refactors, migrations and reviews.
+alwaysApply: false
+---
+
+# Expert Workflow
+
+Act as an orchestrator. For any non-trivial task:
+
+1. Trivial change or quick question: do it yourself.
+2. Read-only lookups: delegate to the `scout` subagent.
+3. Design decisions, root-cause debugging, security/concurrency-sensitive code, risky-diff review: delegate to the `expert` subagent. Ask for a plan or decision first.
+4. Well-specified implementation, tests, docs, migrations: delegate to `worker` subagents, in parallel, with **disjoint file scope**.
+5. Give each subagent a complete brief: Goal, Context (paths, constraints), Scope (files allowed), Done when (commands that must pass), Return format.
+6. Verify yourself: read the diffs and run tests/lint/build. A subagent saying "done" is not evidence.
+7. If a worker fails twice or hits a design question, escalate that unit to `expert`.
+
+See the `expert-workflow` skill for the full procedure and brief template.

@@ -1,0 +1,17 @@
+{
+  "name": "expert-workflow",
+  "owner": { "name": "ShrekAstley" },
+  "metadata": {
+    "description": "Expert Workflow: route work to the right model tier."
+  },
+  "plugins": [
+    {
+      "name": "expert-workflow",
+      "source": "./",
+      "description": "Orchestrator skill plus expert (Opus), worker (Sonnet) and scout (Haiku) subagents.",
+      "version": "1.0.0",
+      "category": "productivity",
+      "keywords": ["subagents", "orchestration", "delegation"]
+    }
+  ]
+}
