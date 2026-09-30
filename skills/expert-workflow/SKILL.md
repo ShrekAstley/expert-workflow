@@ -31,6 +31,22 @@ Before triage, check which skills could help and use the best fit.
    Do not ask about preference, style, or low-cost choices; decide and mention it in the final report.
 5. **No match.** Proceed without a skill. Do not invent or force one.
 
+## Capture repeatable work (offer, never auto-create)
+
+Watch for work worth keeping. When the same action, command sequence, brief, or workaround has come up **twice or more** in this session, or a task is clearly **generic** (would apply unchanged in other projects or for other people/LLMs), offer to capture it.
+
+- **When:** at a natural stopping point, after the current task is delivered. Never interrupt work in progress.
+- **How:** one short question, naming the pattern and a recommended format. Example: "I ran the same lint-fix-test loop three times. Want me to save it as a skill? (Or a subagent / slash command / AGENTS.md rule / script.)"
+- **Pick the format that fits, and recommend one:**
+  - **Skill**: a reusable procedure with judgment steps (works across Claude Code, OpenCode, Cursor).
+  - **Subagent**: a recurring role with its own model tier or tool limits.
+  - **Slash command / prompt file**: a fixed prompt you trigger by hand.
+  - **AGENTS.md / CLAUDE.md / Cursor rule**: a project convention every LLM should follow (AGENTS.md is read by the most tools, so it helps other LLMs too).
+  - **Script**: a deterministic sequence that needs no model at all.
+- **If the user says yes:** write it in the smallest form that works, in the project (`.claude/`, `.opencode/`, `.cursor/`, or `AGENTS.md`) unless they ask for user-level, keep it generic (no secrets, no hard-coded paths), and tell them where it is. If they want it usable by other tools, add the portable version (skill + AGENTS.md line).
+- **If the user says no or ignores it:** do not ask about that pattern again this session. Never ask more than once per task, and skip the offer entirely for trivial or one-off work.
+- This is the one routine case where asking is expected; it is an offer at the end, not a blocker.
+
 ## Procedure
 
 1. **Triage** (after skill selection above). Read enough of the request (and the code, if needed) to classify it.
@@ -47,7 +63,7 @@ Before triage, check which skills could help and use the best fit.
 6. **Parallelize.** Launch independent units in a single message. Only serialize when one unit's output is another's input. Never let two workers edit the same file concurrently; partition by file or module.
 7. **Verify.** Read the diffs, run the tests/linters/build yourself. A worker saying "done" is a claim, not evidence. If verification fails, send the failure back with the exact output, or escalate the unit to the `expert`.
 8. **Escalate on struggle.** If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
-9. **Report.** Summarize what changed, what was verified, and any open risks. Say which agents did what only if it helps the user.
+9. **Report.** Summarize what changed, what was verified, and any open risks. Say which agents did what only if it helps the user. Then make the capture offer above if a repeated or generic pattern appeared.
 
 ## Delegation brief template
 

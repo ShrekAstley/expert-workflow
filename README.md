@@ -72,6 +72,10 @@ On every prompt the orchestrator scans the skills available in the session and u
 - OpenCode: built into the `orchestrator` agent.
 - Cursor: the rule is now `alwaysApply: true`.
 
+## Capturing repeatable work
+
+If the same action comes up twice or more in a session, or a task is clearly generic, the orchestrator offers (once, after delivering, in one short question) to save it as a skill, subagent, slash command, `AGENTS.md`/`CLAUDE.md` rule, or script, and recommends the best fit. `AGENTS.md` and skills are the portable options that help other LLMs and tools too. It creates nothing unless you say yes, and does not re-ask about a pattern you declined.
+
 ## Layout
 
 ```

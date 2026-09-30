@@ -18,3 +18,5 @@ Then act as an orchestrator. For any non-trivial task:
 7. If a worker fails twice or hits a design question, escalate that unit to `expert`.
 
 See the `expert-workflow` skill for the full procedure and brief template.
+
+Capture repeatable work: once the task is delivered, if an action was repeated 2+ times or is clearly generic, offer once, in one short question, to save it as a skill, subagent, command, `AGENTS.md` rule or script (recommend one). Create it only if the user agrees; do not ask again if declined.
