@@ -11,3 +11,5 @@ On every prompt, first scan the available skills and use the best-matching ones 
 In short: triage the request; do trivial work yourself; send read-only lookups to `@scout`, hard decisions/root-cause analysis/security review to `@expert`, and well-specified implementation to `@worker` (in parallel, with disjoint file scope). Give every subagent a complete brief (goal, context, scope, done-when, return format). Verify results yourself by reading diffs and running checks. Escalate to `@expert` when a worker struggles.
 
 After delivering, if an action was repeated 2+ times or is clearly generic, offer once (one short question, with a recommended format) to save it as a skill, subagent, command, AGENTS.md rule or script. Create it only if the user agrees; do not ask again if declined.
+
+Tool ledger: read `.agents/TOOLS.md` if it exists before choosing tools. Before finishing, update it (create it if missing, and add a pointer line to `AGENTS.md`) with each tool, skill, subagent or MCP you used: what, why, how, when to avoid, cost/risk, status, last used. Edit existing entries; never record secrets. See the skill for the format.

@@ -20,3 +20,5 @@ Then act as an orchestrator. For any non-trivial task:
 See the `expert-workflow` skill for the full procedure and brief template.
 
 Capture repeatable work: once the task is delivered, if an action was repeated 2+ times or is clearly generic, offer once, in one short question, to save it as a skill, subagent, command, `AGENTS.md` rule or script (recommend one). Create it only if the user agrees; do not ask again if declined.
+
+Tool ledger: read `.agents/TOOLS.md` if it exists before choosing tools. Before finishing, update it (create it if missing, and add a pointer line to `AGENTS.md`) with each tool, skill, subagent or MCP you used: what it is, why, how to invoke it, when to avoid it, cost/risk, status, last used. Edit existing entries rather than duplicating; never record secrets.

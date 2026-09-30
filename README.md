@@ -76,6 +76,10 @@ On every prompt the orchestrator scans the skills available in the session and u
 
 If the same action comes up twice or more in a session, or a task is clearly generic, the orchestrator offers (once, after delivering, in one short question) to save it as a skill, subagent, slash command, `AGENTS.md`/`CLAUDE.md` rule, or script, and recommends the best fit. `AGENTS.md` and skills are the portable options that help other LLMs and tools too. It creates nothing unless you say yes, and does not re-ask about a pattern you declined.
 
+## Tool ledger
+
+Agents keep `.agents/TOOLS.md` in your project: every skill, subagent, MCP server, command or script that mattered, with what it is, why it is used, how to invoke it, when to avoid it, cost/risk, status and last-used date. Future agents (any LLM, any session) read it first and update it when they finish, editing entries rather than piling up new ones. It is created automatically, with a pointer line added to `AGENTS.md` (and `CLAUDE.md` if present) so every tool finds it. It is never committed for you, and never contains secrets.
+
 ## Layout
 
 ```
