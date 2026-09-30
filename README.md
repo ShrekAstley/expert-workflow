@@ -64,12 +64,21 @@ Run `./install.sh --help` for all options. `EXPERT_WORKFLOW_REPO` and `EXPERT_WO
 
 Just ask for work: "add rate limiting to the API and make sure it can't be bypassed". The skill triggers on non-trivial tasks, or invoke it explicitly ("use the expert-workflow skill"). In OpenCode, switch to the `orchestrator` agent. In Cursor, ask it to use the `expert-workflow` skill/rule.
 
+## Automatic skill selection
+
+On every prompt the orchestrator scans the skills available in the session and uses the best-matching ones (and hands the relevant rules to subagents). It does this without asking. It only stops to ask you when it is dire: the choice would materially change token/cost usage, has irreversible or external side effects, or conflicts with another skill or your instructions.
+
+- Claude Code: a `UserPromptSubmit` hook (`hooks/hooks.json`) injects a one-line reminder each prompt; the full rules are in the skill.
+- OpenCode: built into the `orchestrator` agent.
+- Cursor: the rule is now `alwaysApply: true`.
+
 ## Layout
 
 ```
 .claude-plugin/        plugin.json + marketplace.json (Claude Code plugin)
 skills/expert-workflow/SKILL.md   shared orchestration skill (all three tools)
 agents/                Claude Code subagents (expert, worker, scout)
+hooks/hooks.json       Claude Code UserPromptSubmit hook (per-prompt skill-selection reminder)
 adapters/opencode/     OpenCode agents (model: anthropic/...)
 adapters/cursor/       Cursor agents + rule
 install.sh             installer / uninstaller

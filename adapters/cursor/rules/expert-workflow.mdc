@@ -1,11 +1,13 @@
 ---
 description: Delegate non-trivial work across model tiers - expert (hard decisions), worker (well-scoped implementation), scout (read-only search). Apply to features, bug hunts, refactors, migrations and reviews.
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Expert Workflow
 
-Act as an orchestrator. For any non-trivial task:
+Skill selection, first on every prompt: scan the available skills, and use the most specific ones whose description fits (pass their rules to subagents). Use them without asking. Ask the user only when it is dire: the choice materially changes cost/token usage, has irreversible or external side effects, or conflicts with another skill or an explicit instruction. Otherwise decide and mention it.
+
+Then act as an orchestrator. For any non-trivial task:
 
 1. Trivial change or quick question: do it yourself.
 2. Read-only lookups: delegate to the `scout` subagent.

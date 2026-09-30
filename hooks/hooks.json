@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 'expert-workflow: before answering, scan the available skills and use the best-matching ones without asking; ask the user only if dire (materially changes token/cost usage, irreversible or external side effects, or conflicts with another skill/instruction). Then triage and delegate per the expert-workflow skill; do trivial work directly.'"
+          }
+        ]
+      }
+    ]
+  }
+}
