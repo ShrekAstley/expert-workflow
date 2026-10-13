@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'expert-workflow (automatic): output your `Routing:` line first, use matching skills without asking, delegate to the cheapest correct tier (Haiku quick/scout first, then Sonnet worker, then Opus expert) via the Agent tool for anything beyond a single small action, then verify and update .agents/TOOLS.md.'"
+            "command": "echo 'expert-workflow (automatic): output your `[orchestrator] Routing:` line first, use matching skills without asking, delegate to the cheapest correct tier (Haiku quick/scout first, then Sonnet worker, then Opus expert) via the Agent tool for anything beyond a single small action, label every agent (subagents tag replies like `[worker · Sonnet]`; end with an `Agents:` line), then verify and update .agents/TOOLS.md.'"
           }
         ]
       }

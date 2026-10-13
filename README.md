@@ -13,7 +13,11 @@ The `expert-workflow` skill turns your main session into an orchestrator: triage
 
 ## Automatic by default
 
-Nothing needs to be invoked. On Claude Code, a `SessionStart` hook loads the standing policy (`hooks/policy.md`) and a `UserPromptSubmit` hook reinforces it on every prompt, so routing and skill selection do not depend on the model deciding to load the skill. Each response starts with a visible line such as `Routing: none matched | quick x1 | one-line rename`, so you can see what it chose. Delegation is required beyond a single small action, and routing is Haiku-first: `quick`/`scout` for easy work, `worker` (Sonnet) for well-specified implementation, `expert` (Opus) only for hard decisions. OpenCode (`orchestrator` agent plus an `AGENTS.md` policy block) and Cursor (`alwaysApply` rule) get the same behavior. In `--copy` mode on Claude Code (no plugin hooks), the policy is added to `CLAUDE.md` between `expert-workflow` markers instead; `--uninstall` removes only that block.
+Nothing needs to be invoked. On Claude Code, a `SessionStart` hook loads the standing policy (`hooks/policy.md`) and a `UserPromptSubmit` hook reinforces it on every prompt, so routing and skill selection do not depend on the model deciding to load the skill. Each response starts with a visible line such as `[orchestrator] Routing: none matched | quick x1 | one-line rename`, so you can see what it chose. Delegation is required beyond a single small action, and routing is Haiku-first: `quick`/`scout` for easy work, `worker` (Sonnet) for well-specified implementation, `expert` (Opus) only for hard decisions. OpenCode (`orchestrator` agent plus an `AGENTS.md` policy block) and Cursor (`alwaysApply` rule) get the same behavior. In `--copy` mode on Claude Code (no plugin hooks), the policy is added to `CLAUDE.md` between `expert-workflow` markers instead; `--uninstall` removes only that block.
+
+## Agents identify themselves
+
+Every agent labels its output: the orchestrator opens with `[orchestrator] Routing: ...`, and subagents begin their replies with `[expert · Opus]`, `[worker · Sonnet]`, `[quick · Haiku]` or `[scout · Haiku]`. The orchestrator keeps that attribution when relaying their work and ends its final report with an `Agents:` line, e.g. `Agents: scout x2 (recon), expert x1 (design), worker x2 (impl)`. The tags name the tier rather than a specific model version, so they stay correct if you change the `model:` setting.
 
 ## Install
 

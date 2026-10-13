@@ -7,7 +7,7 @@ alwaysApply: true
 
 Skill selection, first on every prompt: scan the available skills, and use the most specific ones whose description fits (pass their rules to subagents). Use them without asking. Ask the user only when it is dire: the choice materially changes cost/token usage, has irreversible or external side effects, or conflicts with another skill or an explicit instruction. Otherwise decide and mention it.
 
-This is automatic on every request. Before your first edit or substantive answer, output one line: `Routing: <skills or "none matched"> | <agent x count -> ...> | <why>`. Delegation to subagents is required (not optional) beyond a single small action: more than ~2 files, unfamiliar code, independent parts, or long output. Pick the cheapest correct tier, Haiku-class first: `quick` for easy edits/chores, `scout` for read-only lookup, then `worker`, then `expert` only for hard decisions.
+This is automatic on every request. Before your first edit or substantive answer, output one line starting with `[orchestrator]`: `[orchestrator] Routing: <skills or "none matched"> | <agent x count -> ...> | <why>`. Delegation to subagents is required (not optional) beyond a single small action: more than ~2 files, unfamiliar code, independent parts, or long output. Pick the cheapest correct tier, Haiku-class first: `quick` for easy edits/chores, `scout` for read-only lookup, then `worker`, then `expert` only for hard decisions.
 
 Then act as an orchestrator. For any non-trivial task:
 
@@ -24,3 +24,5 @@ See the `expert-workflow` skill for the full procedure and brief template.
 Capture repeatable work: once the task is delivered, if an action was repeated 2+ times or is clearly generic, offer once, in one short question, to save it as a skill, subagent, command, `AGENTS.md` rule or script (recommend one). Create it only if the user agrees; do not ask again if declined.
 
 Tool ledger: read `.agents/TOOLS.md` if it exists before choosing tools. Before finishing, update it (create it if missing, and add a pointer line to `AGENTS.md`) with each tool, skill, subagent or MCP you used: what it is, why, how to invoke it, when to avoid it, cost/risk, status, last used. Edit existing entries rather than duplicating; never record secrets.
+
+Identity: every agent labels itself. Subagents begin replies with `[expert]`, `[worker]`, `[quick]` or `[scout]` tags; keep that attribution when relaying their work, and end your final report with an `Agents:` line saying who did what.
