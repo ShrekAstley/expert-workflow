@@ -51,11 +51,32 @@ Labels:
 
 The **boss** of an agent is whoever spawned it. In Claude Code subagents cannot spawn, so the boss is normally you, the orchestrator (name it in the brief). Rules:
 
-1. **Subagents report up, never sideways.** When an agent finishes it ends its reply with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). That is its notification; it does not message peers.
+1. **Subagents report up.** When an agent finishes it ends its reply with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). That is its notification. It may add `Alert to <Callsign>:` lines for peers its work affects (see Hierarchy below); it never contacts peers directly.
 2. **The boss decides whether to relay.** On each report, ask: does this change what any other running or pending agent should do? Relay only if yes, e.g. the report changes a file, interface, schema, naming or assumption in another agent's scope; invalidates the plan; reveals a blocker or a failed check others depend on; or answers a question another agent raised. Otherwise do not relay (keeps contexts small).
 3. **How to relay.** Send only the relevant facts, attributed (`Update from Bravo: renamed config key X to Y in src/config.ts`). For agents still running, use SendMessage if the tool is available; otherwise hold the information and include it in the brief of any agent not yet started, and re-brief or re-run an agent whose finished work is now invalid.
 4. **Handle `Needs from you`** before anything else: answer it, escalate it a tier, or ask the user if it is dire.
 5. **Record the decision** in the agent log (below): relayed to whom and why, or "not relayed: no overlap".
+
+## Hierarchy, spawn requests and alerts
+
+Claude Code subagents cannot spawn agents or message each other, so **the orchestrator is the switchboard**: the only one that spawns, resumes and forwards. Subagents get the *effect* of spawning and messaging by asking you.
+
+**Layers (maximum 3).**
+- Layer 1: you, the orchestrator.
+- Layer 2: agents you spawn directly. Brief them with `Layer: 2`, `Can request spawns: yes`.
+- Layer 3: agents spawned because a layer-2 agent requested them. Brief with `Layer: 3`, `Boss: <requesting callsign>`, `Can request spawns: no`.
+- Never create a layer 4. A layer-3 agent that needs more help reports that it is blocked; you (or its boss) handle it. No cycles: never spawn an agent to do what its requester was already assigned.
+
+**Spawn requests.** A layer-2 agent may end its reply with a `Spawn request to orchestrator:` block. You then:
+1. Log the request. Decide, do not rubber-stamp: check each requested task against the routing rules (Haiku-first; downgrade or upgrade the role if the task warrants it), scope (must be a subset of the requester's and disjoint from other running agents), and cost. Merge duplicates, trim to what is needed, and decline with a reason if the request is unnecessary. Caps: at most 4 children per requester and 12 live agents per request; beyond that, or if the fan-out would materially change cost, treat it as a "dire" case and ask the user.
+2. Spawn the approved children in parallel with fresh callsigns, `Boss: <requester>`, `Requested by: <requester>`, and a full brief.
+3. Collect the children's reports. Each child's `Report to <Boss>` is delivered by you to its boss: apply the relay rules, and forward to the requester when it asked for results (`Blocking: yes`) or the result affects its work.
+4. Resume the requester with the results: use SendMessage to the requester's agent ID if available (it keeps its context); otherwise spawn a continuation with the same callsign plus `Continuation of <callsign>`, including its earlier report and the children's results in the brief. Then it finishes and reports to you.
+5. Log the request, the children and the outcome.
+
+**Example.** `[Beta · worker · Sonnet]` -> `Spawn request: 1 scout: list all callers of parseConfig; 2 quick: update the docs table. Blocking: yes`. Orchestrator: logs it, approves, spawns Gamma (scout, Haiku) and Epsilon (quick, Haiku) with `Boss: Beta`, `Layer: 3`, and tells Beta (via resume) "waiting on Gamma and Epsilon". Gamma and Epsilon finish with `Report to Beta`; you forward both reports to Beta; Beta completes and reports to you.
+
+**Alerts between agents.** An agent may include `Alert to <Callsign>: ...` in its report. You forward it promptly, attributed (`Alert from Gamma: ...`), to that agent if it is running (SendMessage) or pending (put it in its brief), trimming it to what matters. If the target already finished and the alert invalidates its work, re-brief or re-run it. Drop an alert only if it is clearly irrelevant or duplicates something already sent, and log that. In runtimes where subagents can message each other directly, that is allowed within the same tree, but log it.
 
 ## Agent log (`.agents/log/`)
 
@@ -68,10 +89,11 @@ Keep a record of who spawned whom and what each was asked to do.
 ## HH:MM <request, one line>
 Routing: <the routing line>
 
-| Callsign | Role · Model | Boss | Task | Status | Result | Relayed |
-|----------|--------------|------|------|--------|--------|---------|
-| Alfa | scout · Haiku | orchestrator | find route registration points | done | src/routes.ts:12 | -> Charlie (shapes plan) |
-| Bravo | worker · Sonnet | orchestrator | implement middleware | done | src/rate.ts new | not relayed: no overlap |
+| Callsign | Layer | Role · Model | Boss | Task | Status | Result | Relayed |
+|----------|-------|--------------|------|------|--------|--------|---------|
+| Alfa | 2 | scout · Haiku | orchestrator | find route registration points | done | src/routes.ts:12 | -> Charlie (shapes plan) |
+| Bravo | 2 | worker · Sonnet | orchestrator | implement middleware | waiting | requested 2 spawns | - |
+| Delta | 3 | scout · Haiku | Bravo (requested) | list callers of parseConfig | done | 14 callers | -> Bravo (requested) |
 ```
 
 - Create the directory and file silently when missing. Keep entries to one line each; no secrets or full prompts. Do not commit the log unless asked, and mention in the final report that it was updated. Suggest adding `.agents/log/` to `.gitignore` the first time you create it.
@@ -157,7 +179,9 @@ Maintained by agents. Read before choosing tools; update after using one.
 
 ```
 Callsign: <next NATO name>
-Boss: orchestrator
+Boss: orchestrator   (or the requesting callsign for layer 3)
+Layer: 2   (3 for requested children)
+Can request spawns: yes   (no at layer 3)
 Goal: <one sentence outcome>
 Context: <why; relevant files/functions with paths; constraints; decisions already made>
 Scope: <exactly which files/areas you may touch; what is out of bounds>
@@ -178,7 +202,8 @@ Rules for briefs: include paths, not vague references; state acceptance criteria
 - Sending easy mechanical work to Sonnet or Opus when `quick`/`scout` (Haiku) would do.
 - Skipping the `Routing:` line, or skipping skill selection because the task "seems simple".
 - Loading every skill "just in case", or asking the user to confirm routine skill use.
-- Subagents cannot spawn further subagents in Claude Code; keep the orchestration in the main session and keep the tree flat.
+- Subagents cannot spawn further subagents in Claude Code: they request spawns through you, and the tree stops at 3 layers. Do not build deep chains; if a task needs more than 3 layers, restructure it.
+- Rubber-stamping spawn requests, or letting a requester fan out without checking tier, scope and cost.
 
 ## Example
 
