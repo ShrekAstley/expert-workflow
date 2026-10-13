@@ -107,6 +107,28 @@ remove_files() { # remove_files <src-dir> <dest-dir>
   return 0
 }
 
+
+BEGIN_MARK="<!-- expert-workflow:begin -->"
+END_MARK="<!-- expert-workflow:end -->"
+
+add_block() { # add_block <file>: idempotently install the standing policy into an instructions file
+  ensure_src
+  local f="$1"
+  mkdir -p "$(dirname "$f")"; touch "$f"
+  remove_block "$f"
+  { [ -s "$f" ] && echo; echo "$BEGIN_MARK"; cat "$SRC/hooks/policy.md"; echo "$END_MARK"; } >> "$f"
+  echo "    + policy block in $f"
+}
+
+remove_block() { # remove_block <file>
+  local f="$1"
+  [ -f "$f" ] || return 0
+  grep -qF "$BEGIN_MARK" "$f" || return 0
+  sed -i "/$BEGIN_MARK/,/$END_MARK/d" "$f"
+  [ -s "$f" ] || rm -f "$f"
+  echo "    - policy block in $f"
+}
+
 # ---- Claude Code -----------------------------------------------------------
 claude_scope() { [ "$SCOPE" = "project" ] && echo project || echo user; }
 
@@ -120,6 +142,7 @@ claude_install_copy() {
   cp "$SRC/skills/expert-workflow/SKILL.md" "$root/skills/expert-workflow/SKILL.md"
   echo "    + $root/skills/expert-workflow/SKILL.md"
   copy_files "$SRC/agents" "$root/agents"
+  add_block "$root/CLAUDE.md"   # no plugin hooks in copy mode, so make it automatic via CLAUDE.md
 }
 
 install_claude() {
@@ -131,7 +154,7 @@ install_claude() {
       || warn "marketplace add reported an error (it may already be added); continuing"
     claude plugin install "$PLUGIN@$MARKETPLACE" --scope "$(claude_scope)" \
       || die "claude plugin install failed. Try inside Claude Code:  /plugin marketplace add $REPO  then  /plugin install $PLUGIN@$MARKETPLACE"
-    say "Done. Restart Claude Code (or run /reload-plugins), then ask for work, or run /agents to see expert, worker, scout."
+    say "Done. Restart Claude Code (or run /reload-plugins), then ask for work, or run /agents to see expert, worker, quick, scout."
   else
     [ "$FORCE_COPY" -eq 1 ] || warn "'claude' CLI not found on PATH; falling back to a plain file copy."
     claude_install_copy
@@ -152,6 +175,7 @@ uninstall_claude() {
   say "Removing copied files under $root (if any)"
   rm -f "$root/skills/expert-workflow/SKILL.md"; rmdir "$root/skills/expert-workflow" 2>/dev/null || true
   remove_files "$SRC/agents" "$root/agents"
+  remove_block "$root/CLAUDE.md"
 }
 
 # ---- OpenCode --------------------------------------------------------------
@@ -165,7 +189,8 @@ install_opencode() {
   mkdir -p "$root/skills/expert-workflow"
   cp "$SRC/skills/expert-workflow/SKILL.md" "$root/skills/expert-workflow/SKILL.md"
   echo "    + $root/skills/expert-workflow/SKILL.md"
-  say "Done. Restart OpenCode. Pick the 'orchestrator' agent (Tab), or @expert / @worker / @scout directly."
+  add_block "$root/AGENTS.md"
+  say "Done. Restart OpenCode. Pick the 'orchestrator' agent (Tab), or @expert / @worker / @quick / @scout directly. The policy is also added to AGENTS.md so it applies to every agent automatically."
   echo "    Models are set in the agent files' 'model:' field; edit them if you use a different provider."
 }
 
@@ -174,6 +199,7 @@ uninstall_opencode() {
   local root; root="$(opencode_root)"
   say "Removing OpenCode files from $root"
   remove_files "$SRC/adapters/opencode/agents" "$root/agents"
+  remove_block "$root/AGENTS.md"
   rm -f "$root/skills/expert-workflow/SKILL.md"; rmdir "$root/skills/expert-workflow" 2>/dev/null || true
 }
 
@@ -193,7 +219,7 @@ install_cursor() {
   else
     warn "Cursor rules are project-scoped; skipped. Re-run with --project inside a repo to add the rule."
   fi
-  say "Done. Restart Cursor. Edit 'model:' in $root/agents/*.md to pin specific models (default: expert inherits your chosen model, worker/scout use 'fast')."
+  say "Done. Restart Cursor. Edit 'model:' in $root/agents/*.md to pin specific models (default: expert inherits your chosen model, worker/quick/scout use 'fast')."
 }
 
 uninstall_cursor() {

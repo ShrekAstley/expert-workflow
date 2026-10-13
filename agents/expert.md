@@ -1,6 +1,6 @@
 ---
 name: expert
-description: Senior engineer for hard problems. Use for architecture and design decisions, root-cause debugging of unclear failures, security-sensitive or concurrent code, tricky algorithms, and reviewing risky diffs. Not for mechanical or well-specified edits.
+description: Use proactively. Senior engineer for hard problems. Use for architecture and design decisions, root-cause debugging of unclear failures, security-sensitive or concurrent code, tricky algorithms, and reviewing risky diffs. Not for mechanical or well-specified edits.
 model: opus
 ---
 

@@ -6,9 +6,14 @@ A skill plus a small team of subagents that routes each part of a request to the
 |-------|-------|-----|
 | `expert` | Opus | Design decisions, root-cause debugging, security/concurrency-sensitive code, reviewing risky diffs |
 | `worker` | Sonnet | Well-specified implementation, tests, docs, migrations, executing the expert's plan |
-| `scout` | Haiku | Read-only search and summarization |
+| `scout` | Haiku | Read-only search, summarization, condensing logs and test output |
+| `quick` | Haiku | Easy edits and chores: renames, formatting, boilerplate, doc/config tweaks, run-and-report |
 
 The `expert-workflow` skill turns your main session into an orchestrator: triage, decompose, delegate with a complete brief, run independent units in parallel, verify, and escalate to the expert when a worker struggles. Trivial requests are handled directly, with no delegation overhead.
+
+## Automatic by default
+
+Nothing needs to be invoked. On Claude Code, a `SessionStart` hook loads the standing policy (`hooks/policy.md`) and a `UserPromptSubmit` hook reinforces it on every prompt, so routing and skill selection do not depend on the model deciding to load the skill. Each response starts with a visible line such as `Routing: none matched | quick x1 | one-line rename`, so you can see what it chose. Delegation is required beyond a single small action, and routing is Haiku-first: `quick`/`scout` for easy work, `worker` (Sonnet) for well-specified implementation, `expert` (Opus) only for hard decisions. OpenCode (`orchestrator` agent plus an `AGENTS.md` policy block) and Cursor (`alwaysApply` rule) get the same behavior. In `--copy` mode on Claude Code (no plugin hooks), the policy is added to `CLAUDE.md` between `expert-workflow` markers instead; `--uninstall` removes only that block.
 
 ## Install
 
@@ -31,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/shrekastley/expert-workflow/main/in
 
 If the `claude` CLI is not on your PATH, the script falls back to copying files into `~/.claude`. Use `--copy` to force that.
 
-Verify with `/agents` (you should see `expert`, `worker`, `scout`). Agents are namespaced as `expert-workflow:expert`, etc.
+Verify with `/agents` (you should see `expert`, `worker`, `quick`, `scout`). Agents are namespaced as `expert-workflow:expert`, etc.
 
 ### OpenCode
 
@@ -85,8 +90,8 @@ Agents keep `.agents/TOOLS.md` in your project: every skill, subagent, MCP serve
 ```
 .claude-plugin/        plugin.json + marketplace.json (Claude Code plugin)
 skills/expert-workflow/SKILL.md   shared orchestration skill (all three tools)
-agents/                Claude Code subagents (expert, worker, scout)
-hooks/hooks.json       Claude Code UserPromptSubmit hook (per-prompt skill-selection reminder)
+agents/                Claude Code subagents (expert, worker, quick, scout)
+hooks/                 Claude Code hooks (SessionStart policy + per-prompt reminder)
 adapters/opencode/     OpenCode agents (model: anthropic/...)
 adapters/cursor/       Cursor agents + rule
 install.sh             installer / uninstaller

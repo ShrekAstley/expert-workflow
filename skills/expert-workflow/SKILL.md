@@ -1,21 +1,40 @@
 ---
 name: expert-workflow
-description: Split a task across model tiers. Use for any non-trivial request (features, bug hunts, refactors, reviews, migrations) so hard reasoning goes to an Opus "expert" subagent, well-scoped implementation goes to Sonnet "worker" subagents, and read-only search goes to a Haiku "scout". Triggers on requests to plan, delegate, parallelize, or "use agents".
+description: Automatic model-tier routing and skill selection. Use on EVERY coding request, before doing any work, so easy tasks go to a Haiku "quick"/"scout", well-scoped implementation to Sonnet "worker"s, and hard reasoning to an Opus "expert". Applies to any non-trivial request (features, bug hunts, refactors, reviews, migrations) so hard reasoning goes to an Opus "expert" subagent, well-scoped implementation goes to Sonnet "worker" subagents, and read-only search goes to a Haiku "scout". Triggers on requests to plan, delegate, parallelize, or "use agents".
 ---
 
 # Expert Workflow
 
-You are the **orchestrator**. Your job is to decompose the request, assign each piece to the cheapest agent that can do it *correctly*, run independent pieces in parallel, and verify the combined result. Do not do everything yourself, and do not delegate blindly.
+You are the **orchestrator**. Your job is to decompose the request, assign each piece to the **cheapest agent that can do it correctly**, run independent pieces in parallel, and verify the combined result. This is automatic: it applies to every request without the user asking for it. Do not do everything yourself, and do not delegate blindly.
+
+## Automatic routing (mandatory)
+
+Before your first edit or substantive answer on every request, state a one-line routing decision, then act on it:
+
+`Routing: <skills used or "none matched"> | <agent x count -> agent x count ...> | <why, in a few words>`
+
+Examples: `Routing: none matched | quick x1 | one-line rename` / `Routing: security-review | scout x2 -> expert -> worker x2 | auth change, multi-file`.
+
+Delegation is **required, not optional**, when any of these hold:
+- the work touches more than ~2 files, or needs exploring unfamiliar code,
+- it has independent parts that can run in parallel,
+- it involves long outputs (test runs, logs, large searches) that would bloat your context,
+- any part is a hard decision or risky change (send that part to `expert`).
+
+Do the work yourself only when it is a single small action (one tiny edit or one question you already know the answer to) where spawning an agent would cost more than doing it. If you are about to do several steps inline on a non-trivial task, stop and delegate instead.
+
+**Haiku first.** Default every unit to the lowest tier that can do it correctly, and move up only when needed: `quick`/`scout` (Haiku) -> `worker` (Sonnet) -> `expert` (Opus). Easy work is the majority of most requests; if more than a small share of your units are going to Sonnet or Opus, re-check whether they really need it.
 
 ## The tiers
 
 | Tier | Agent | Model | Use for | Never use for |
 |------|-------|-------|---------|---------------|
 | Expert | `expert` | Opus | Architecture and design decisions, ambiguous or root-cause debugging, security-sensitive code, concurrency, tricky algorithms, cross-cutting refactors, final review of risky diffs | Renames, boilerplate, mechanical edits |
-| Worker | `worker` | Sonnet | Implementing a well-specified change, writing tests, docs, config, migrations following an existing pattern, applying an expert's plan | Open-ended design, unclear requirements |
-| Scout | `scout` | Haiku | Read-only: finding files/symbols, summarizing modules, listing usages, gathering facts | Any edit; any judgment call |
+| Worker | `worker` | Sonnet | Implementing a well-specified change that needs real code reasoning, writing tests, docs, config, migrations following an existing pattern, applying an expert's plan | Open-ended design, unclear requirements |
+| Scout | `scout` | Haiku | Read-only: finding files/symbols, summarizing modules, listing usages, gathering facts, reading and condensing logs or test output | Any edit; any judgment call |
+| Quick | `quick` | Haiku | Easy edits and chores: renames, formatting, boilerplate, doc/comment/config tweaks, simple find-and-replace, running a command and reporting, commit messages | Design decisions; security, concurrency or public-API changes; anything needing judgment |
 
-When a subagent type is namespaced by a plugin, use `expert-workflow:expert`, `expert-workflow:worker`, `expert-workflow:scout`.
+When a subagent type is namespaced by a plugin, use `expert-workflow:expert`, `expert-workflow:worker`, `expert-workflow:quick`, `expert-workflow:scout`.
 
 ## Skill selection (do this first, on every prompt)
 
@@ -75,19 +94,22 @@ Maintained by agents. Read before choosing tools; update after using one.
 ## Procedure
 
 1. **Triage** (after skill selection above). Read enough of the request (and the code, if needed) to classify it.
-   - Trivial (one small edit, a quick question): just do it yourself. Delegation has overhead.
+   - A single small action: do it yourself.
+   - Easy and mechanical (even several steps): send to `quick` rather than spending the main model on it.
    - Otherwise continue.
 2. **Recon (optional).** If you need facts about the codebase, spawn one or more `scout`s in parallel with narrow questions. Ask for file paths and line numbers, not essays.
 3. **Decompose.** Break the work into units. For each, decide the tier using this test:
    - Could a competent engineer do it from the brief alone, with no judgment calls? → **worker**.
    - Does it require choosing between designs, diagnosing an unknown cause, or would a subtle mistake be costly (security, data loss, concurrency, public API)? → **expert**.
-   - Is it only looking things up? → **scout**.
-   - When unsure between two tiers, pick the higher one for *decisions* and the lower one for *execution*.
+   - Is it only looking things up or condensing output? → **scout**.
+   - Is it an easy, mechanical edit or chore with an obvious right answer (rename, format, boilerplate, config/doc tweak, run-and-report)? → **quick**.
+   - Prefer the lower tier when the brief is precise and the check is mechanical (a test or command proves it). Pick the higher tier only for *decisions* or when a subtle mistake would be costly.
+   - Over-using Sonnet/Opus for easy work is a defect, same as under-using them for hard work.
 4. **Design first when the work is hard.** Send the hard part to the `expert` and ask for a *plan or decision*, not the whole implementation, unless the implementation is itself the hard part. Then hand the plan to `worker`s to execute.
 5. **Delegate with a complete brief** (template below). Subagents start with zero context.
 6. **Parallelize.** Launch independent units in a single message. Only serialize when one unit's output is another's input. Never let two workers edit the same file concurrently; partition by file or module.
 7. **Verify.** Read the diffs, run the tests/linters/build yourself. A worker saying "done" is a claim, not evidence. If verification fails, send the failure back with the exact output, or escalate the unit to the `expert`.
-8. **Escalate on struggle.** If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
+8. **Escalate on struggle.** If a `quick` fails once on something that turned out not to be easy, move it to `worker`. If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
 9. **Record and report.** Summarize what changed, what was verified, and any open risks. Say which agents did what only if it helps the user. Update the tool ledger. Then make the capture offer above if a repeated or generic pattern appeared.
 
 ## Delegation brief template
@@ -109,7 +131,9 @@ Rules for briefs: include paths, not vague references; state acceptance criteria
 - Delegating a task you have not understood well enough to specify.
 - Parallel workers with overlapping file scope.
 - Accepting agent output without running checks.
-- Spawning agents for a two-line change.
+- Spawning agents for a single two-line change, or, the opposite, grinding through a multi-file task inline without delegating.
+- Sending easy mechanical work to Sonnet or Opus when `quick`/`scout` (Haiku) would do.
+- Skipping the `Routing:` line, or skipping skill selection because the task "seems simple".
 - Loading every skill "just in case", or asking the user to confirm routine skill use.
 - Subagents cannot spawn further subagents in Claude Code; keep the orchestration in the main session and keep the tree flat.
 
@@ -117,8 +141,9 @@ Rules for briefs: include paths, not vague references; state acceptance criteria
 
 Request: "Add rate limiting to the API and make sure it can't be bypassed."
 
-1. `scout` x2 (parallel): "List all route registration points and middleware order" / "Find existing config and Redis usage."
+1. `scout` x2 (parallel, Haiku): "List all route registration points and middleware order" / "Find existing config and Redis usage."
 2. `expert`: "Design the rate-limit middleware (algorithm, key selection, bypass risks such as spoofed `X-Forwarded-For`), return a plan with file-level steps."
 3. `worker` x2 (parallel, disjoint files): implement middleware + config per plan; write tests per plan.
 4. You: run the test suite and read the diff.
-5. `expert`: security review of the final diff (small, high-value use of Opus).
+5. `quick`: update the README config table and changelog entry.
+6. `expert`: security review of the final diff (small, high-value use of Opus).

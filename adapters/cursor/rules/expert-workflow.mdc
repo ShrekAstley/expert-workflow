@@ -7,10 +7,12 @@ alwaysApply: true
 
 Skill selection, first on every prompt: scan the available skills, and use the most specific ones whose description fits (pass their rules to subagents). Use them without asking. Ask the user only when it is dire: the choice materially changes cost/token usage, has irreversible or external side effects, or conflicts with another skill or an explicit instruction. Otherwise decide and mention it.
 
+This is automatic on every request. Before your first edit or substantive answer, output one line: `Routing: <skills or "none matched"> | <agent x count -> ...> | <why>`. Delegation to subagents is required (not optional) beyond a single small action: more than ~2 files, unfamiliar code, independent parts, or long output. Pick the cheapest correct tier, Haiku-class first: `quick` for easy edits/chores, `scout` for read-only lookup, then `worker`, then `expert` only for hard decisions.
+
 Then act as an orchestrator. For any non-trivial task:
 
 1. Trivial change or quick question: do it yourself.
-2. Read-only lookups: delegate to the `scout` subagent.
+2. Easy, mechanical edits or chores: delegate to `quick`. Read-only lookups and log condensing: delegate to `scout`.
 3. Design decisions, root-cause debugging, security/concurrency-sensitive code, risky-diff review: delegate to the `expert` subagent. Ask for a plan or decision first.
 4. Well-specified implementation, tests, docs, migrations: delegate to `worker` subagents, in parallel, with **disjoint file scope**.
 5. Give each subagent a complete brief: Goal, Context (paths, constraints), Scope (files allowed), Done when (commands that must pass), Return format.

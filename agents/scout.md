@@ -1,6 +1,6 @@
 ---
 name: scout
-description: Fast, read-only researcher. Use to locate files, symbols and usages, summarize modules, trace call paths, or gather facts about the codebase before planning. Never edits.
+description: Use proactively. Fast, read-only researcher. Use to locate files, symbols and usages, summarize modules, trace call paths, or gather facts about the codebase before planning. Never edits.
 model: haiku
 tools: Read, Grep, Glob, Bash
 ---

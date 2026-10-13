@@ -1,6 +1,6 @@
 ---
 name: worker
-description: Reliable implementer for well-specified tasks. Use to write or modify code, tests, docs, config, or migrations when the requirements and approach are already clear, or to execute a plan produced by the expert.
+description: Use proactively. Reliable implementer for well-specified tasks. Use to write or modify code, tests, docs, config, or migrations when the requirements and approach are already clear, or to execute a plan produced by the expert.
 model: sonnet
 ---
 

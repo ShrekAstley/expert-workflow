@@ -1,11 +1,21 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cat \"${CLAUDE_PLUGIN_ROOT}/hooks/policy.md\""
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "echo 'expert-workflow: before answering, scan the available skills and use the best-matching ones without asking; ask the user only if dire (materially changes token/cost usage, irreversible or external side effects, or conflicts with another skill/instruction). Read .agents/TOOLS.md if it exists and prefer the tools it recommends. Then triage and delegate per the expert-workflow skill; do trivial work directly. Once the task is delivered, if an action was repeated (2+ times) or is generic and reusable, offer once (briefly) to save it as a skill, subagent, command, AGENTS.md rule or script; do not ask again if declined. Before finishing, update .agents/TOOLS.md with the tools you used (what, why, how).'"
+            "command": "echo 'expert-workflow (automatic): output your `Routing:` line first, use matching skills without asking, delegate to the cheapest correct tier (Haiku quick/scout first, then Sonnet worker, then Opus expert) via the Agent tool for anything beyond a single small action, then verify and update .agents/TOOLS.md.'"
           }
         ]
       }
