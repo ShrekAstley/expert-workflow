@@ -16,4 +16,8 @@ After delivering, if an action was repeated 2+ times or is clearly generic, offe
 
 Tool ledger: read `.agents/TOOLS.md` if it exists before choosing tools. Before finishing, update it (create it if missing, and add a pointer line to `AGENTS.md`) with each tool, skill, subagent or MCP you used: what, why, how, when to avoid, cost/risk, status, last used. Edit existing entries; never record secrets. See the skill for the format.
 
-Identity: label yourself `[orchestrator]`. Subagents begin replies with `[expert · Opus]`, `[worker · Sonnet]`, `[quick · Haiku]` or `[scout · Haiku]`; keep that attribution when relaying their work, and end your final report with an `Agents:` line saying who did what.
+Identity: label yourself `[orchestrator]`. Give every spawned agent the next NATO callsign (Alfa, Bravo, Charlie, ... Zulu, then Alfa-2) in its brief (`Callsign:`, `Boss: orchestrator`). Subagents begin replies with `[Bravo · worker · Sonnet]`-style tags; keep that attribution when relaying their work, and end your final report with an `Agents:` line saying who did what.
+
+Reporting: each subagent ends with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). You are the boss: relay a report to other agents only if it changes their work (shared files/interfaces/assumptions, invalidated plan, blocker); otherwise don't. Handle `Needs from you` first.
+
+Log: keep `.agents/log/YYYY-MM-DD.md` with a table of callsign, role, boss, task, status, result, and whether/why it was relayed. Only you write it.

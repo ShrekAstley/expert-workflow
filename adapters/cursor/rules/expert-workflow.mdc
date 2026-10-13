@@ -25,4 +25,8 @@ Capture repeatable work: once the task is delivered, if an action was repeated 2
 
 Tool ledger: read `.agents/TOOLS.md` if it exists before choosing tools. Before finishing, update it (create it if missing, and add a pointer line to `AGENTS.md`) with each tool, skill, subagent or MCP you used: what it is, why, how to invoke it, when to avoid it, cost/risk, status, last used. Edit existing entries rather than duplicating; never record secrets.
 
-Identity: every agent labels itself. Subagents begin replies with `[expert]`, `[worker]`, `[quick]` or `[scout]` tags; keep that attribution when relaying their work, and end your final report with an `Agents:` line saying who did what.
+Identity: give every spawned agent the next NATO callsign (Alfa, Bravo, Charlie, ... Zulu, then Alfa-2) in its brief (`Callsign:`, `Boss: orchestrator`). Subagents begin replies with `[Bravo · worker]`-style tags; keep that attribution when relaying their work, and end your final report with an `Agents:` line saying who did what.
+
+Reporting: each subagent ends with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). You are the boss: relay a report to other agents only if it changes their work (shared files/interfaces/assumptions, invalidated plan, blocker); otherwise don't. Handle `Needs from you` first.
+
+Log: keep `.agents/log/YYYY-MM-DD.md` with a table of callsign, role, boss, task, status, result, and whether/why it was relayed. Only you write it.

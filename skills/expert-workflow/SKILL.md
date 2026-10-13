@@ -36,13 +36,45 @@ Do the work yourself only when it is a single small action (one tiny edit or one
 
 When a subagent type is namespaced by a plugin, use `expert-workflow:expert`, `expert-workflow:worker`, `expert-workflow:quick`, `expert-workflow:scout`.
 
-## Identity (every agent says who it is)
+## Identity and callsigns
 
-Every agent labels its output so the user can follow who did what:
-- You, the orchestrator, start your routing line with `[orchestrator]`, and prefix any other message you write while orchestrating the same way.
-- Each subagent begins its reply with its tag on its own line: `[expert · Opus]`, `[worker · Sonnet]`, `[quick · Haiku]`, `[scout · Haiku]`. When you relay or summarize their work, keep the attribution (e.g. "`[scout · Haiku]` found ...; `[worker · Sonnet]` changed ...").
-- Subagent replies are visible to you, not necessarily to the user, so your final report must include a short `Agents:` line listing who did what (e.g. `Agents: scout x2 (recon), expert x1 (design), worker x2 (impl)`).
-- If a subagent's reply lacks its tag, add the attribution yourself when reporting. Never present a subagent's work as your own.
+Every agent has a unique **callsign** from the NATO phonetic alphabet, assigned by you in spawn order within a request: Alfa, Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel, India, Juliett, Kilo, Lima, Mike, November, Oscar, Papa, Quebec, Romeo, Sierra, Tango, Uniform, Victor, Whiskey, X-ray, Yankee, Zulu. After Zulu, continue with a numeric suffix (Alfa-2, Bravo-2, ...). Never reuse a callsign within a request. Put it in the brief (`Callsign: Bravo`, `Boss: orchestrator`).
+
+Labels:
+- You, the orchestrator, are `[orchestrator]`; your routing line starts with it, and so does any message you write while orchestrating.
+- Each subagent begins its reply with `[<Callsign> · <role> · <Model>]`: `[Alfa · scout · Haiku]`, `[Bravo · worker · Sonnet]`, `[Charlie · expert · Opus]`, `[Delta · quick · Haiku]`.
+- When you relay or summarize work, keep the attribution ("`[Alfa · scout · Haiku]` found ...").
+- Subagent replies are visible to you, not necessarily the user, so your final report must include an `Agents:` line: `Agents: Alfa scout (recon), Bravo expert (design), Charlie+Delta worker (impl)`.
+- If a subagent's reply lacks its tag, add the attribution yourself. Never present a subagent's work as your own.
+
+## Reporting and relay (boss decides)
+
+The **boss** of an agent is whoever spawned it. In Claude Code subagents cannot spawn, so the boss is normally you, the orchestrator (name it in the brief). Rules:
+
+1. **Subagents report up, never sideways.** When an agent finishes it ends its reply with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). That is its notification; it does not message peers.
+2. **The boss decides whether to relay.** On each report, ask: does this change what any other running or pending agent should do? Relay only if yes, e.g. the report changes a file, interface, schema, naming or assumption in another agent's scope; invalidates the plan; reveals a blocker or a failed check others depend on; or answers a question another agent raised. Otherwise do not relay (keeps contexts small).
+3. **How to relay.** Send only the relevant facts, attributed (`Update from Bravo: renamed config key X to Y in src/config.ts`). For agents still running, use SendMessage if the tool is available; otherwise hold the information and include it in the brief of any agent not yet started, and re-brief or re-run an agent whose finished work is now invalid.
+4. **Handle `Needs from you`** before anything else: answer it, escalate it a tier, or ask the user if it is dire.
+5. **Record the decision** in the agent log (below): relayed to whom and why, or "not relayed: no overlap".
+
+## Agent log (`.agents/log/`)
+
+Keep a record of who spawned whom and what each was asked to do.
+
+- **Automatic (Claude Code plugin):** hooks append every spawn, start and stop to `.agents/log/events.jsonl` (time, event, agent type, description, task excerpt, result excerpt). You do not write this file.
+- **Run log (you write it, all tools):** `.agents/log/YYYY-MM-DD.md`. Add a section per request, updated as agents start and finish. Only you write it (subagents never do, which avoids concurrent-write conflicts). Format:
+
+```markdown
+## HH:MM <request, one line>
+Routing: <the routing line>
+
+| Callsign | Role · Model | Boss | Task | Status | Result | Relayed |
+|----------|--------------|------|------|--------|--------|---------|
+| Alfa | scout · Haiku | orchestrator | find route registration points | done | src/routes.ts:12 | -> Charlie (shapes plan) |
+| Bravo | worker · Sonnet | orchestrator | implement middleware | done | src/rate.ts new | not relayed: no overlap |
+```
+
+- Create the directory and file silently when missing. Keep entries to one line each; no secrets or full prompts. Do not commit the log unless asked, and mention in the final report that it was updated. Suggest adding `.agents/log/` to `.gitignore` the first time you create it.
 
 ## Skill selection (do this first, on every prompt)
 
@@ -116,19 +148,22 @@ Maintained by agents. Read before choosing tools; update after using one.
 4. **Design first when the work is hard.** Send the hard part to the `expert` and ask for a *plan or decision*, not the whole implementation, unless the implementation is itself the hard part. Then hand the plan to `worker`s to execute.
 5. **Delegate with a complete brief** (template below). Subagents start with zero context.
 6. **Parallelize.** Launch independent units in a single message. Only serialize when one unit's output is another's input. Never let two workers edit the same file concurrently; partition by file or module.
-7. **Verify.** Read the diffs, run the tests/linters/build yourself. A worker saying "done" is a claim, not evidence. If verification fails, send the failure back with the exact output, or escalate the unit to the `expert`.
-8. **Escalate on struggle.** If a `quick` fails once on something that turned out not to be easy, move it to `worker`. If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
-9. **Record and report.** Summarize what changed, what was verified, and any open risks. Include the `Agents:` line from the Identity section. Update the tool ledger. Then make the capture offer above if a repeated or generic pattern appeared.
+7. **Collect reports.** As each agent finishes, read its `Report to` block, apply the relay rules above, and log it.
+8. **Verify.** Read the diffs, run the tests/linters/build yourself. A worker saying "done" is a claim, not evidence. If verification fails, send the failure back with the exact output, or escalate the unit to the `expert`.
+9. **Escalate on struggle.** If a `quick` fails once on something that turned out not to be easy, move it to `worker`. If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
+10. **Record and report.** Summarize what changed, what was verified, and any open risks. Include the `Agents:` line from the Identity section. Update the agent log and the tool ledger. Then make the capture offer above if a repeated or generic pattern appeared.
 
 ## Delegation brief template
 
 ```
+Callsign: <next NATO name>
+Boss: orchestrator
 Goal: <one sentence outcome>
 Context: <why; relevant files/functions with paths; constraints; decisions already made>
 Scope: <exactly which files/areas you may touch; what is out of bounds>
 Steps / plan: <numbered, if known>
 Done when: <observable acceptance criteria, e.g. commands that must pass>
-Return: <the exact format you want back: diff summary, file:line list, decision + rationale>
+Return: <the exact format you want back: diff summary, file:line list, decision + rationale>, then the Report to <Boss> block
 ```
 
 Rules for briefs: include paths, not vague references; state acceptance criteria as commands; say what NOT to change; ask for a short, structured reply.

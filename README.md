@@ -15,9 +15,11 @@ The `expert-workflow` skill turns your main session into an orchestrator: triage
 
 Nothing needs to be invoked. On Claude Code, a `SessionStart` hook loads the standing policy (`hooks/policy.md`) and a `UserPromptSubmit` hook reinforces it on every prompt, so routing and skill selection do not depend on the model deciding to load the skill. Each response starts with a visible line such as `[orchestrator] Routing: none matched | quick x1 | one-line rename`, so you can see what it chose. Delegation is required beyond a single small action, and routing is Haiku-first: `quick`/`scout` for easy work, `worker` (Sonnet) for well-specified implementation, `expert` (Opus) only for hard decisions. OpenCode (`orchestrator` agent plus an `AGENTS.md` policy block) and Cursor (`alwaysApply` rule) get the same behavior. In `--copy` mode on Claude Code (no plugin hooks), the policy is added to `CLAUDE.md` between `expert-workflow` markers instead; `--uninstall` removes only that block.
 
-## Agents identify themselves
+## Callsigns, reporting and the agent log
 
-Every agent labels its output: the orchestrator opens with `[orchestrator] Routing: ...`, and subagents begin their replies with `[expert · Opus]`, `[worker · Sonnet]`, `[quick · Haiku]` or `[scout · Haiku]`. The orchestrator keeps that attribution when relaying their work and ends its final report with an `Agents:` line, e.g. `Agents: scout x2 (recon), expert x1 (design), worker x2 (impl)`. The tags name the tier rather than a specific model version, so they stay correct if you change the `model:` setting.
+- **Callsigns.** Each spawned agent gets the next NATO phonetic name (Alfa, Bravo, Charlie, ... Zulu, then Alfa-2). Output is tagged `[Bravo · worker · Sonnet]`; the orchestrator is `[orchestrator]` and ends with an `Agents:` line, e.g. `Agents: Alfa scout (recon), Bravo expert (design), Charlie+Delta worker (impl)`. Tags name the tier, not a model version, so they stay correct if you change `model:`.
+- **Report up, boss decides.** When an agent finishes it ends with a `Report to <Boss>:` block (status, result, *affects others*, needs from you). Agents never message peers. The boss (the orchestrator) relays a report to other agents only if it changes their work: shared files or interfaces, an invalidated plan, a blocker. Otherwise nothing is relayed, which keeps contexts small.
+- **Log.** `.agents/log/YYYY-MM-DD.md` holds a table per request: callsign, role, boss, task, status, result, and whether/why it was relayed. On Claude Code, hooks also append every spawn/start/stop to `.agents/log/events.jsonl` automatically. Logs are not committed for you (consider gitignoring `.agents/log/`) and hold no secrets or full prompts.
 
 ## Install
 
@@ -95,7 +97,7 @@ Agents keep `.agents/TOOLS.md` in your project: every skill, subagent, MCP serve
 .claude-plugin/        plugin.json + marketplace.json (Claude Code plugin)
 skills/expert-workflow/SKILL.md   shared orchestration skill (all three tools)
 agents/                Claude Code subagents (expert, worker, quick, scout)
-hooks/                 Claude Code hooks (SessionStart policy + per-prompt reminder)
+hooks/                 Claude Code hooks (policy, per-prompt reminder, agent event log)
 adapters/opencode/     OpenCode agents (model: anthropic/...)
 adapters/cursor/       Cursor agents + rule
 install.sh             installer / uninstaller
