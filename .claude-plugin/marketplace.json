@@ -9,7 +9,7 @@
       "name": "expert-workflow",
       "source": "./",
       "description": "Orchestrator skill plus expert (Opus), worker (Sonnet) and scout (Haiku) subagents.",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "productivity",
       "keywords": ["subagents", "orchestration", "delegation"]
     }

@@ -6,9 +6,22 @@ A skill plus a small team of subagents that routes each part of a request to the
 |-------|-------|-----|
 | `expert` | Opus | Design decisions, root-cause debugging, security/concurrency-sensitive code, reviewing risky diffs |
 | `worker` | Sonnet | Well-specified implementation, tests, docs, migrations, executing the expert's plan |
-| `scout` | Haiku | Read-only search and summarization |
+| `scout` | Haiku | Read-only search, summarization, condensing logs and test output |
+| `quick` | Haiku | Easy edits and chores: renames, formatting, boilerplate, doc/config tweaks, run-and-report |
 
 The `expert-workflow` skill turns your main session into an orchestrator: triage, decompose, delegate with a complete brief, run independent units in parallel, verify, and escalate to the expert when a worker struggles. Trivial requests are handled directly, with no delegation overhead.
+
+## Automatic by default
+
+Nothing needs to be invoked. On Claude Code, a `SessionStart` hook loads the standing policy (`hooks/policy.md`) and a `UserPromptSubmit` hook reinforces it on every prompt, so routing and skill selection do not depend on the model deciding to load the skill. Each response starts with a visible line such as `[orchestrator] Routing: none matched | quick x1 | one-line rename`, so you can see what it chose. Delegation is required beyond a single small action, and routing is Haiku-first: `quick`/`scout` for easy work, `worker` (Sonnet) for well-specified implementation, `expert` (Opus) only for hard decisions. OpenCode (`orchestrator` agent plus an `AGENTS.md` policy block) and Cursor (`alwaysApply` rule) get the same behavior. In `--copy` mode on Claude Code (no plugin hooks), the policy is added to `CLAUDE.md` between `expert-workflow` markers instead; `--uninstall` removes only that block.
+
+## Callsigns, reporting and the agent log
+
+- **Callsigns.** Each spawned agent gets the next NATO phonetic name (Alfa, Bravo, Charlie, ... Zulu, then Alfa-2). Output is tagged `[Bravo · worker · Sonnet]`; the orchestrator is `[orchestrator]` and ends with an `Agents:` line, e.g. `Agents: Alfa scout (recon), Bravo expert (design), Charlie+Delta worker (impl)`. Tags name the tier, not a model version, so they stay correct if you change `model:`.
+- **Report up, boss decides.** When an agent finishes it ends with a `Report to <Boss>:` block (status, result, *affects others*, needs from you). Agents never message peers. The boss (the orchestrator) relays a report to other agents only if it changes their work: shared files or interfaces, an invalidated plan, a blocker. Otherwise nothing is relayed, which keeps contexts small.
+- **Spawn requests (max 3 layers).** Subagents can't spawn, so they ask: a layer-2 agent ends its reply with a `Spawn request to orchestrator:` block, and the orchestrator vets it (cheapest tier, scope, cost; at most 4 children per requester and 12 live agents), spawns the children as layer 3 with the requester as their boss, forwards their reports, and resumes the requester with the results. Layer 3 cannot request more; there is no layer 4. Example: Beta (Sonnet) asks for two helpers, the orchestrator spawns Gamma and Epsilon (Haiku) with `Boss: Beta`, they report, the orchestrator forwards both reports to Beta, and Beta finishes.
+- **Alerts between agents.** An agent can add `Alert to <Callsign>:` to its report. The orchestrator forwards it promptly (SendMessage to a running agent, or into the brief of a pending one). Agents never contact each other directly, because Claude Code subagents cannot; the orchestrator is the switchboard.
+- **Log.** `.agents/log/YYYY-MM-DD.md` holds a table per request: callsign, role, boss, task, status, result, and whether/why it was relayed. On Claude Code, hooks also append every spawn/start/stop to `.agents/log/events.jsonl` automatically. Logs are not committed for you (consider gitignoring `.agents/log/`) and hold no secrets or full prompts.
 
 ## Install
 
@@ -31,7 +44,7 @@ curl -fsSL https://raw.githubusercontent.com/shrekastley/expert-workflow/main/in
 
 If the `claude` CLI is not on your PATH, the script falls back to copying files into `~/.claude`. Use `--copy` to force that.
 
-Verify with `/agents` (you should see `expert`, `worker`, `scout`). Agents are namespaced as `expert-workflow:expert`, etc.
+Verify with `/agents` (you should see `expert`, `worker`, `quick`, `scout`). Agents are namespaced as `expert-workflow:expert`, etc.
 
 ### OpenCode
 
@@ -64,12 +77,29 @@ Run `./install.sh --help` for all options. `EXPERT_WORKFLOW_REPO` and `EXPERT_WO
 
 Just ask for work: "add rate limiting to the API and make sure it can't be bypassed". The skill triggers on non-trivial tasks, or invoke it explicitly ("use the expert-workflow skill"). In OpenCode, switch to the `orchestrator` agent. In Cursor, ask it to use the `expert-workflow` skill/rule.
 
+## Automatic skill selection
+
+On every prompt the orchestrator scans the skills available in the session and uses the best-matching ones (and hands the relevant rules to subagents). It does this without asking. It only stops to ask you when it is dire: the choice would materially change token/cost usage, has irreversible or external side effects, or conflicts with another skill or your instructions.
+
+- Claude Code: a `UserPromptSubmit` hook (`hooks/hooks.json`) injects a one-line reminder each prompt; the full rules are in the skill.
+- OpenCode: built into the `orchestrator` agent.
+- Cursor: the rule is now `alwaysApply: true`.
+
+## Capturing repeatable work
+
+If the same action comes up twice or more in a session, or a task is clearly generic, the orchestrator offers (once, after delivering, in one short question) to save it as a skill, subagent, slash command, `AGENTS.md`/`CLAUDE.md` rule, or script, and recommends the best fit. `AGENTS.md` and skills are the portable options that help other LLMs and tools too. It creates nothing unless you say yes, and does not re-ask about a pattern you declined.
+
+## Tool ledger
+
+Agents keep `.agents/TOOLS.md` in your project: every skill, subagent, MCP server, command or script that mattered, with what it is, why it is used, how to invoke it, when to avoid it, cost/risk, status and last-used date. Future agents (any LLM, any session) read it first and update it when they finish, editing entries rather than piling up new ones. It is created automatically, with a pointer line added to `AGENTS.md` (and `CLAUDE.md` if present) so every tool finds it. It is never committed for you, and never contains secrets.
+
 ## Layout
 
 ```
 .claude-plugin/        plugin.json + marketplace.json (Claude Code plugin)
 skills/expert-workflow/SKILL.md   shared orchestration skill (all three tools)
-agents/                Claude Code subagents (expert, worker, scout)
+agents/                Claude Code subagents (expert, worker, quick, scout)
+hooks/                 Claude Code hooks (policy, per-prompt reminder, agent event log)
 adapters/opencode/     OpenCode agents (model: anthropic/...)
 adapters/cursor/       Cursor agents + rule
 install.sh             installer / uninstaller

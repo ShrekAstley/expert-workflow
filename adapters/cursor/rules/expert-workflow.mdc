@@ -1,14 +1,18 @@
 ---
 description: Delegate non-trivial work across model tiers - expert (hard decisions), worker (well-scoped implementation), scout (read-only search). Apply to features, bug hunts, refactors, migrations and reviews.
-alwaysApply: false
+alwaysApply: true
 ---
 
 # Expert Workflow
 
-Act as an orchestrator. For any non-trivial task:
+Skill selection, first on every prompt: scan the available skills, and use the most specific ones whose description fits (pass their rules to subagents). Use them without asking. Ask the user only when it is dire: the choice materially changes cost/token usage, has irreversible or external side effects, or conflicts with another skill or an explicit instruction. Otherwise decide and mention it.
+
+This is automatic on every request. Before your first edit or substantive answer, output one line starting with `[orchestrator]`: `[orchestrator] Routing: <skills or "none matched"> | <agent x count -> ...> | <why>`. Delegation to subagents is required (not optional) beyond a single small action: more than ~2 files, unfamiliar code, independent parts, or long output. Pick the cheapest correct tier, Haiku-class first: `quick` for easy edits/chores, `scout` for read-only lookup, then `worker`, then `expert` only for hard decisions.
+
+Then act as an orchestrator. For any non-trivial task:
 
 1. Trivial change or quick question: do it yourself.
-2. Read-only lookups: delegate to the `scout` subagent.
+2. Easy, mechanical edits or chores: delegate to `quick`. Read-only lookups and log condensing: delegate to `scout`.
 3. Design decisions, root-cause debugging, security/concurrency-sensitive code, risky-diff review: delegate to the `expert` subagent. Ask for a plan or decision first.
 4. Well-specified implementation, tests, docs, migrations: delegate to `worker` subagents, in parallel, with **disjoint file scope**.
 5. Give each subagent a complete brief: Goal, Context (paths, constraints), Scope (files allowed), Done when (commands that must pass), Return format.
@@ -16,3 +20,15 @@ Act as an orchestrator. For any non-trivial task:
 7. If a worker fails twice or hits a design question, escalate that unit to `expert`.
 
 See the `expert-workflow` skill for the full procedure and brief template.
+
+Capture repeatable work: once the task is delivered, if an action was repeated 2+ times or is clearly generic, offer once, in one short question, to save it as a skill, subagent, command, `AGENTS.md` rule or script (recommend one). Create it only if the user agrees; do not ask again if declined.
+
+Tool ledger: read `.agents/TOOLS.md` if it exists before choosing tools. Before finishing, update it (create it if missing, and add a pointer line to `AGENTS.md`) with each tool, skill, subagent or MCP you used: what it is, why, how to invoke it, when to avoid it, cost/risk, status, last used. Edit existing entries rather than duplicating; never record secrets.
+
+Identity: give every spawned agent the next NATO callsign (Alfa, Bravo, Charlie, ... Zulu, then Alfa-2) in its brief (`Callsign:`, `Boss: orchestrator`). Subagents begin replies with `[Bravo · worker]`-style tags; keep that attribution when relaying their work, and end your final report with an `Agents:` line saying who did what.
+
+Reporting: each subagent ends with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). You are the boss: relay a report to other agents only if it changes their work (shared files/interfaces/assumptions, invalidated plan, blocker); otherwise don't. Handle `Needs from you` first.
+
+Log: keep `.agents/log/YYYY-MM-DD.md` with a table of callsign, role, boss, task, status, result, and whether/why it was relayed. Only you write it.
+
+Hierarchy (max 3 layers: you = 1, agents you spawn = 2, agents spawned on a layer-2 agent's request = 3, never a 4th). Subagents cannot spawn or message peers, so you are the switchboard. A layer-2 agent may end with a `Spawn request to orchestrator:` block; vet it (cheapest tier, scope a subset of the requester's, cost; at most 4 children per requester and 12 live agents), spawn the children with `Boss: <requester>`, `Layer: 3`, `Can request spawns: no`, forward their reports to the requester, and resume the requester with the results. Forward `Alert to <Callsign>:` lines to their targets promptly, attributed. Log layers and requests in the run log.

@@ -1,49 +1,193 @@
 ---
 name: expert-workflow
-description: Split a task across model tiers. Use for any non-trivial request (features, bug hunts, refactors, reviews, migrations) so hard reasoning goes to an Opus "expert" subagent, well-scoped implementation goes to Sonnet "worker" subagents, and read-only search goes to a Haiku "scout". Triggers on requests to plan, delegate, parallelize, or "use agents".
+description: Automatic model-tier routing and skill selection. Use on EVERY coding request, before doing any work, so easy tasks go to a Haiku "quick"/"scout", well-scoped implementation to Sonnet "worker"s, and hard reasoning to an Opus "expert". Applies to any non-trivial request (features, bug hunts, refactors, reviews, migrations) so hard reasoning goes to an Opus "expert" subagent, well-scoped implementation goes to Sonnet "worker" subagents, and read-only search goes to a Haiku "scout". Triggers on requests to plan, delegate, parallelize, or "use agents".
 ---
 
 # Expert Workflow
 
-You are the **orchestrator**. Your job is to decompose the request, assign each piece to the cheapest agent that can do it *correctly*, run independent pieces in parallel, and verify the combined result. Do not do everything yourself, and do not delegate blindly.
+You are the **orchestrator**. Your job is to decompose the request, assign each piece to the **cheapest agent that can do it correctly**, run independent pieces in parallel, and verify the combined result. This is automatic: it applies to every request without the user asking for it. Do not do everything yourself, and do not delegate blindly.
+
+## Automatic routing (mandatory)
+
+Before your first edit or substantive answer on every request, state a one-line routing decision, then act on it:
+
+`[orchestrator] Routing: <skills used or "none matched"> | <agent x count -> agent x count ...> | <why, in a few words>`
+
+Examples: `[orchestrator] Routing: none matched | quick x1 | one-line rename` / `[orchestrator] Routing: security-review | scout x2 -> expert -> worker x2 | auth change, multi-file`.
+
+Delegation is **required, not optional**, when any of these hold:
+- the work touches more than ~2 files, or needs exploring unfamiliar code,
+- it has independent parts that can run in parallel,
+- it involves long outputs (test runs, logs, large searches) that would bloat your context,
+- any part is a hard decision or risky change (send that part to `expert`).
+
+Do the work yourself only when it is a single small action (one tiny edit or one question you already know the answer to) where spawning an agent would cost more than doing it. If you are about to do several steps inline on a non-trivial task, stop and delegate instead.
+
+**Haiku first.** Default every unit to the lowest tier that can do it correctly, and move up only when needed: `quick`/`scout` (Haiku) -> `worker` (Sonnet) -> `expert` (Opus). Easy work is the majority of most requests; if more than a small share of your units are going to Sonnet or Opus, re-check whether they really need it.
 
 ## The tiers
 
 | Tier | Agent | Model | Use for | Never use for |
 |------|-------|-------|---------|---------------|
 | Expert | `expert` | Opus | Architecture and design decisions, ambiguous or root-cause debugging, security-sensitive code, concurrency, tricky algorithms, cross-cutting refactors, final review of risky diffs | Renames, boilerplate, mechanical edits |
-| Worker | `worker` | Sonnet | Implementing a well-specified change, writing tests, docs, config, migrations following an existing pattern, applying an expert's plan | Open-ended design, unclear requirements |
-| Scout | `scout` | Haiku | Read-only: finding files/symbols, summarizing modules, listing usages, gathering facts | Any edit; any judgment call |
+| Worker | `worker` | Sonnet | Implementing a well-specified change that needs real code reasoning, writing tests, docs, config, migrations following an existing pattern, applying an expert's plan | Open-ended design, unclear requirements |
+| Scout | `scout` | Haiku | Read-only: finding files/symbols, summarizing modules, listing usages, gathering facts, reading and condensing logs or test output | Any edit; any judgment call |
+| Quick | `quick` | Haiku | Easy edits and chores: renames, formatting, boilerplate, doc/comment/config tweaks, simple find-and-replace, running a command and reporting, commit messages | Design decisions; security, concurrency or public-API changes; anything needing judgment |
 
-When a subagent type is namespaced by a plugin, use `expert-workflow:expert`, `expert-workflow:worker`, `expert-workflow:scout`.
+When a subagent type is namespaced by a plugin, use `expert-workflow:expert`, `expert-workflow:worker`, `expert-workflow:quick`, `expert-workflow:scout`.
+
+## Identity and callsigns
+
+Every agent has a unique **callsign** from the NATO phonetic alphabet, assigned by you in spawn order within a request: Alfa, Bravo, Charlie, Delta, Echo, Foxtrot, Golf, Hotel, India, Juliett, Kilo, Lima, Mike, November, Oscar, Papa, Quebec, Romeo, Sierra, Tango, Uniform, Victor, Whiskey, X-ray, Yankee, Zulu. After Zulu, continue with a numeric suffix (Alfa-2, Bravo-2, ...). Never reuse a callsign within a request. Put it in the brief (`Callsign: Bravo`, `Boss: orchestrator`).
+
+Labels:
+- You, the orchestrator, are `[orchestrator]`; your routing line starts with it, and so does any message you write while orchestrating.
+- Each subagent begins its reply with `[<Callsign> · <role> · <Model>]`: `[Alfa · scout · Haiku]`, `[Bravo · worker · Sonnet]`, `[Charlie · expert · Opus]`, `[Delta · quick · Haiku]`.
+- When you relay or summarize work, keep the attribution ("`[Alfa · scout · Haiku]` found ...").
+- Subagent replies are visible to you, not necessarily the user, so your final report must include an `Agents:` line: `Agents: Alfa scout (recon), Bravo expert (design), Charlie+Delta worker (impl)`.
+- If a subagent's reply lacks its tag, add the attribution yourself. Never present a subagent's work as your own.
+
+## Reporting and relay (boss decides)
+
+The **boss** of an agent is whoever spawned it. In Claude Code subagents cannot spawn, so the boss is normally you, the orchestrator (name it in the brief). Rules:
+
+1. **Subagents report up.** When an agent finishes it ends its reply with a `Report to <Boss>:` block (Status, Result, Affects others, Needs from you). That is its notification. It may add `Alert to <Callsign>:` lines for peers its work affects (see Hierarchy below); it never contacts peers directly.
+2. **The boss decides whether to relay.** On each report, ask: does this change what any other running or pending agent should do? Relay only if yes, e.g. the report changes a file, interface, schema, naming or assumption in another agent's scope; invalidates the plan; reveals a blocker or a failed check others depend on; or answers a question another agent raised. Otherwise do not relay (keeps contexts small).
+3. **How to relay.** Send only the relevant facts, attributed (`Update from Bravo: renamed config key X to Y in src/config.ts`). For agents still running, use SendMessage if the tool is available; otherwise hold the information and include it in the brief of any agent not yet started, and re-brief or re-run an agent whose finished work is now invalid.
+4. **Handle `Needs from you`** before anything else: answer it, escalate it a tier, or ask the user if it is dire.
+5. **Record the decision** in the agent log (below): relayed to whom and why, or "not relayed: no overlap".
+
+## Hierarchy, spawn requests and alerts
+
+Claude Code subagents cannot spawn agents or message each other, so **the orchestrator is the switchboard**: the only one that spawns, resumes and forwards. Subagents get the *effect* of spawning and messaging by asking you.
+
+**Layers (maximum 3).**
+- Layer 1: you, the orchestrator.
+- Layer 2: agents you spawn directly. Brief them with `Layer: 2`, `Can request spawns: yes`.
+- Layer 3: agents spawned because a layer-2 agent requested them. Brief with `Layer: 3`, `Boss: <requesting callsign>`, `Can request spawns: no`.
+- Never create a layer 4. A layer-3 agent that needs more help reports that it is blocked; you (or its boss) handle it. No cycles: never spawn an agent to do what its requester was already assigned.
+
+**Spawn requests.** A layer-2 agent may end its reply with a `Spawn request to orchestrator:` block. You then:
+1. Log the request. Decide, do not rubber-stamp: check each requested task against the routing rules (Haiku-first; downgrade or upgrade the role if the task warrants it), scope (must be a subset of the requester's and disjoint from other running agents), and cost. Merge duplicates, trim to what is needed, and decline with a reason if the request is unnecessary. Caps: at most 4 children per requester and 12 live agents per request; beyond that, or if the fan-out would materially change cost, treat it as a "dire" case and ask the user.
+2. Spawn the approved children in parallel with fresh callsigns, `Boss: <requester>`, `Requested by: <requester>`, and a full brief.
+3. Collect the children's reports. Each child's `Report to <Boss>` is delivered by you to its boss: apply the relay rules, and forward to the requester when it asked for results (`Blocking: yes`) or the result affects its work.
+4. Resume the requester with the results: use SendMessage to the requester's agent ID if available (it keeps its context); otherwise spawn a continuation with the same callsign plus `Continuation of <callsign>`, including its earlier report and the children's results in the brief. Then it finishes and reports to you.
+5. Log the request, the children and the outcome.
+
+**Example.** `[Beta · worker · Sonnet]` -> `Spawn request: 1 scout: list all callers of parseConfig; 2 quick: update the docs table. Blocking: yes`. Orchestrator: logs it, approves, spawns Gamma (scout, Haiku) and Epsilon (quick, Haiku) with `Boss: Beta`, `Layer: 3`, and tells Beta (via resume) "waiting on Gamma and Epsilon". Gamma and Epsilon finish with `Report to Beta`; you forward both reports to Beta; Beta completes and reports to you.
+
+**Alerts between agents.** An agent may include `Alert to <Callsign>: ...` in its report. You forward it promptly, attributed (`Alert from Gamma: ...`), to that agent if it is running (SendMessage) or pending (put it in its brief), trimming it to what matters. If the target already finished and the alert invalidates its work, re-brief or re-run it. Drop an alert only if it is clearly irrelevant or duplicates something already sent, and log that. In runtimes where subagents can message each other directly, that is allowed within the same tree, but log it.
+
+## Agent log (`.agents/log/`)
+
+Keep a record of who spawned whom and what each was asked to do.
+
+- **Automatic (Claude Code plugin):** hooks append every spawn, start and stop to `.agents/log/events.jsonl` (time, event, agent type, description, task excerpt, result excerpt). You do not write this file.
+- **Run log (you write it, all tools):** `.agents/log/YYYY-MM-DD.md`. Add a section per request, updated as agents start and finish. Only you write it (subagents never do, which avoids concurrent-write conflicts). Format:
+
+```markdown
+## HH:MM <request, one line>
+Routing: <the routing line>
+
+| Callsign | Layer | Role · Model | Boss | Task | Status | Result | Relayed |
+|----------|-------|--------------|------|------|--------|--------|---------|
+| Alfa | 2 | scout · Haiku | orchestrator | find route registration points | done | src/routes.ts:12 | -> Charlie (shapes plan) |
+| Bravo | 2 | worker · Sonnet | orchestrator | implement middleware | waiting | requested 2 spawns | - |
+| Delta | 3 | scout · Haiku | Bravo (requested) | list callers of parseConfig | done | 14 callers | -> Bravo (requested) |
+```
+
+- Create the directory and file silently when missing. Keep entries to one line each; no secrets or full prompts. Do not commit the log unless asked, and mention in the final report that it was updated. Suggest adding `.agents/log/` to `.gitignore` the first time you create it.
+
+## Skill selection (do this first, on every prompt)
+
+Before triage, check which skills could help and use the best fit.
+
+1. **Inventory.** Read `.agents/TOOLS.md` if present (see Tool ledger). Look at the skills available in this session (the skill list in your context; in OpenCode/Cursor, the skills/rules directories and their descriptions). Do not assume; read the descriptions.
+2. **Match.** Pick the skills whose description clearly fits the request (or a sub-task of it). Prefer the most specific skill over a generic one, and prefer a few well-matched skills over many loosely related ones. Load a skill only when it will change what you do.
+3. **Apply.** Invoke the chosen skills yourself, and tell delegated agents which skill to follow (subagents start with no context; name the skill and paste the relevant rules into the brief). Match skills to tiers: a skill about a hard domain goes with the `expert` unit, a mechanical one with the `worker`.
+4. **Ask only when it is dire.** Use a skill without asking by default, including optional ones. Stop and ask the user (one short question, with a recommended default) only if using or skipping the skill would:
+   - materially change cost or token usage (e.g. spawning many parallel agents, a very long-running or exhaustive workflow, reading a huge codebase),
+   - have irreversible or external side effects (deploys, pushes, deletes, messages, payments, data migrations),
+   - conflict with another matching skill or with an explicit user instruction.
+   Do not ask about preference, style, or low-cost choices; decide and mention it in the final report.
+5. **No match.** Proceed without a skill. Do not invent or force one.
+
+## Capture repeatable work (offer, never auto-create)
+
+Watch for work worth keeping. When the same action, command sequence, brief, or workaround has come up **twice or more** in this session, or a task is clearly **generic** (would apply unchanged in other projects or for other people/LLMs), offer to capture it.
+
+- **When:** at a natural stopping point, after the current task is delivered. Never interrupt work in progress.
+- **How:** one short question, naming the pattern and a recommended format. Example: "I ran the same lint-fix-test loop three times. Want me to save it as a skill? (Or a subagent / slash command / AGENTS.md rule / script.)"
+- **Pick the format that fits, and recommend one:**
+  - **Skill**: a reusable procedure with judgment steps (works across Claude Code, OpenCode, Cursor).
+  - **Subagent**: a recurring role with its own model tier or tool limits.
+  - **Slash command / prompt file**: a fixed prompt you trigger by hand.
+  - **AGENTS.md / CLAUDE.md / Cursor rule**: a project convention every LLM should follow (AGENTS.md is read by the most tools, so it helps other LLMs too).
+  - **Script**: a deterministic sequence that needs no model at all.
+- **If the user says yes:** write it in the smallest form that works, in the project (`.claude/`, `.opencode/`, `.cursor/`, or `AGENTS.md`) unless they ask for user-level, keep it generic (no secrets, no hard-coded paths), and tell them where it is. If they want it usable by other tools, add the portable version (skill + AGENTS.md line).
+- **If the user says no or ignores it:** do not ask about that pattern again this session. Never ask more than once per task, and skip the offer entirely for trivial or one-off work.
+- This is the one routine case where asking is expected; it is an offer at the end, not a blocker.
+
+## Tool ledger (`.agents/TOOLS.md`)
+
+Keep a project-local record of the tools you use, so future agents (any LLM, any session) can decide **what** to use, **why**, and **how** without rediscovering it.
+
+- **Read it first.** During skill selection, if `.agents/TOOLS.md` exists, read it. Prefer entries marked as working; heed the "avoid when" and "cost" notes.
+- **Update it when you finish.** Record every tool that mattered to the result: skills, subagents (and their tier), MCP servers/tools, slash commands, CLIs and scripts (test runner, linter, build, deploy), and notable workarounds. Skip trivial built-ins (read, edit, grep) unless used in a non-obvious way.
+- **Edit, don't append blindly.** Update the existing entry (bump "last used", refine notes, fix wrong ones); add a new entry only for a new tool; remove entries you found to be broken or obsolete. Keep the file short and current, ideally under ~150 lines.
+- **Write it for a stranger.** Concrete commands, no secrets, tokens, or personal data, no absolute paths outside the repo.
+- **Create it silently** if missing (write `.agents/TOOLS.md` with the format below), and add one line to `AGENTS.md` (create it if absent; add to `CLAUDE.md` too if that file exists) so every tool finds it: `Tool ledger: see .agents/TOOLS.md before choosing tools; update it after using one.` Tell the user in the final report that it was created or changed. Do not commit it unless asked.
+
+Format:
+
+```markdown
+# Tool ledger
+Maintained by agents. Read before choosing tools; update after using one.
+
+## <tool name> (<kind: skill | subagent | mcp | command | cli | script>)
+- **What:** one line.
+- **Why we use it:** the problem it solves here.
+- **How:** exact invocation, e.g. `npm test -- --watch=false`, or which agent tier and brief shape.
+- **Use when / avoid when:** ...
+- **Cost / risk:** tokens, time, side effects (or "none").
+- **Status:** works | flaky | broken (+ note). **Last used:** YYYY-MM-DD
+```
 
 ## Procedure
 
-1. **Triage.** Read enough of the request (and the code, if needed) to classify it.
-   - Trivial (one small edit, a quick question): just do it yourself. Delegation has overhead.
+1. **Triage** (after skill selection above). Read enough of the request (and the code, if needed) to classify it.
+   - A single small action: do it yourself.
+   - Easy and mechanical (even several steps): send to `quick` rather than spending the main model on it.
    - Otherwise continue.
 2. **Recon (optional).** If you need facts about the codebase, spawn one or more `scout`s in parallel with narrow questions. Ask for file paths and line numbers, not essays.
 3. **Decompose.** Break the work into units. For each, decide the tier using this test:
    - Could a competent engineer do it from the brief alone, with no judgment calls? → **worker**.
    - Does it require choosing between designs, diagnosing an unknown cause, or would a subtle mistake be costly (security, data loss, concurrency, public API)? → **expert**.
-   - Is it only looking things up? → **scout**.
-   - When unsure between two tiers, pick the higher one for *decisions* and the lower one for *execution*.
+   - Is it only looking things up or condensing output? → **scout**.
+   - Is it an easy, mechanical edit or chore with an obvious right answer (rename, format, boilerplate, config/doc tweak, run-and-report)? → **quick**.
+   - Prefer the lower tier when the brief is precise and the check is mechanical (a test or command proves it). Pick the higher tier only for *decisions* or when a subtle mistake would be costly.
+   - Over-using Sonnet/Opus for easy work is a defect, same as under-using them for hard work.
 4. **Design first when the work is hard.** Send the hard part to the `expert` and ask for a *plan or decision*, not the whole implementation, unless the implementation is itself the hard part. Then hand the plan to `worker`s to execute.
 5. **Delegate with a complete brief** (template below). Subagents start with zero context.
 6. **Parallelize.** Launch independent units in a single message. Only serialize when one unit's output is another's input. Never let two workers edit the same file concurrently; partition by file or module.
-7. **Verify.** Read the diffs, run the tests/linters/build yourself. A worker saying "done" is a claim, not evidence. If verification fails, send the failure back with the exact output, or escalate the unit to the `expert`.
-8. **Escalate on struggle.** If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
-9. **Report.** Summarize what changed, what was verified, and any open risks. Say which agents did what only if it helps the user.
+7. **Collect reports.** As each agent finishes, read its `Report to` block, apply the relay rules above, and log it.
+8. **Verify.** Read the diffs, run the tests/linters/build yourself. A worker saying "done" is a claim, not evidence. If verification fails, send the failure back with the exact output, or escalate the unit to the `expert`.
+9. **Escalate on struggle.** If a `quick` fails once on something that turned out not to be easy, move it to `worker`. If a worker fails twice, or reports uncertainty about design, stop retrying at the same tier and give the problem (with what was tried) to the `expert`.
+10. **Record and report.** Summarize what changed, what was verified, and any open risks. Include the `Agents:` line from the Identity section. Update the agent log and the tool ledger. Then make the capture offer above if a repeated or generic pattern appeared.
 
 ## Delegation brief template
 
 ```
+Callsign: <next NATO name>
+Boss: orchestrator   (or the requesting callsign for layer 3)
+Layer: 2   (3 for requested children)
+Can request spawns: yes   (no at layer 3)
 Goal: <one sentence outcome>
 Context: <why; relevant files/functions with paths; constraints; decisions already made>
 Scope: <exactly which files/areas you may touch; what is out of bounds>
 Steps / plan: <numbered, if known>
 Done when: <observable acceptance criteria, e.g. commands that must pass>
-Return: <the exact format you want back: diff summary, file:line list, decision + rationale>
+Return: <the exact format you want back: diff summary, file:line list, decision + rationale>, then the Report to <Boss> block
 ```
 
 Rules for briefs: include paths, not vague references; state acceptance criteria as commands; say what NOT to change; ask for a short, structured reply.
@@ -54,15 +198,20 @@ Rules for briefs: include paths, not vague references; state acceptance criteria
 - Delegating a task you have not understood well enough to specify.
 - Parallel workers with overlapping file scope.
 - Accepting agent output without running checks.
-- Spawning agents for a two-line change.
-- Subagents cannot spawn further subagents in Claude Code; keep the orchestration in the main session and keep the tree flat.
+- Spawning agents for a single two-line change, or, the opposite, grinding through a multi-file task inline without delegating.
+- Sending easy mechanical work to Sonnet or Opus when `quick`/`scout` (Haiku) would do.
+- Skipping the `Routing:` line, or skipping skill selection because the task "seems simple".
+- Loading every skill "just in case", or asking the user to confirm routine skill use.
+- Subagents cannot spawn further subagents in Claude Code: they request spawns through you, and the tree stops at 3 layers. Do not build deep chains; if a task needs more than 3 layers, restructure it.
+- Rubber-stamping spawn requests, or letting a requester fan out without checking tier, scope and cost.
 
 ## Example
 
 Request: "Add rate limiting to the API and make sure it can't be bypassed."
 
-1. `scout` x2 (parallel): "List all route registration points and middleware order" / "Find existing config and Redis usage."
+1. `scout` x2 (parallel, Haiku): "List all route registration points and middleware order" / "Find existing config and Redis usage."
 2. `expert`: "Design the rate-limit middleware (algorithm, key selection, bypass risks such as spoofed `X-Forwarded-For`), return a plan with file-level steps."
 3. `worker` x2 (parallel, disjoint files): implement middleware + config per plan; write tests per plan.
 4. You: run the test suite and read the diff.
-5. `expert`: security review of the final diff (small, high-value use of Opus).
+5. `quick`: update the README config table and changelog entry.
+6. `expert`: security review of the final diff (small, high-value use of Opus).
