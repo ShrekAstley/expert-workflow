@@ -1,6 +1,6 @@
 {
   "name": "expert-workflow",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Model-tiered multi-agent workflow: Opus experts take the hard problems, Sonnet workers do well-scoped implementation, Haiku scouts do read-only search.",
   "author": { "name": "ShrekAstley" },
   "homepage": "https://github.com/shrekastley/expert-workflow",
